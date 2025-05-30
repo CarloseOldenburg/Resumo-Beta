@@ -11,7 +11,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Calendar, Filter, X, Users, Eye, EyeOff, Search, Loader2, RefreshCw } from "lucide-react"
+import {
+  Plus,
+  Calendar,
+  Filter,
+  X,
+  Users,
+  Eye,
+  EyeOff,
+  Search,
+  Loader2,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format, isValid, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -19,6 +32,7 @@ import { useAutoBackup } from "@/hooks/use-auto-backup"
 
 interface TaskListProps {
   selectedDate?: string
+  onDateChange?: (date: string) => void
 }
 
 // Função auxiliar para formatar data com segurança
@@ -45,7 +59,7 @@ const formatDateSafely = (dateString: string | undefined, formatStr = "dd 'de' M
   }
 }
 
-export default function TaskList({ selectedDate }: TaskListProps) {
+export default function TaskList({ selectedDate, onDateChange }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [clientTags, setClientTags] = useState<ClientTag[]>([])
   const [loading, setLoading] = useState(true)
@@ -204,6 +218,9 @@ export default function TaskList({ selectedDate }: TaskListProps) {
 
   const clearFilters = () => {
     setFilters({ showClosed: true })
+    if (onDateChange) {
+      onDateChange(format(new Date(), "yyyy-MM-dd"))
+    }
     fetchTasks() // Recarregar tarefas sem filtros
   }
 
@@ -403,9 +420,9 @@ export default function TaskList({ selectedDate }: TaskListProps) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <Card key={i} className="animate-pulse">
+          <Card key={i} className="animate-pulse bg-gray-800 border-gray-700">
             <CardContent className="p-4">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-700 rounded w-3/4"></div>
             </CardContent>
           </Card>
         ))}
@@ -415,131 +432,205 @@ export default function TaskList({ selectedDate }: TaskListProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header com Filtros */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-lg flex items-center">
-            <Calendar className="h-5 w-5 mr-2" />
-            {selectedDate ? <>Tarefas de {formatDateSafely(selectedDate)}</> : "Todas as Tarefas"}
+      {/* Filtros Unificados */}
+      <Card className="bg-gradient-to-r from-gray-800 to-gray-900 border-gray-700 shadow-xl">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle className="text-lg flex items-center text-white">
+            <Filter className="h-5 w-5 mr-3 text-blue-400" />
+            Filtros e Controles
           </CardTitle>
           <div className="flex items-center space-x-2">
-            <Button onClick={refreshTasks} disabled={refreshing} variant="outline" size="sm">
-              {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-              Atualizar
-            </Button>
             <Button
-              onClick={() => setFilters({ ...filters, showClosed: !filters.showClosed })}
-              variant={filters.showClosed ? "default" : "outline"}
+              onClick={() => setShowFilters(!showFilters)}
+              variant="outline"
               size="sm"
+              className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
             >
-              {filters.showClosed ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
-              {filters.showClosed ? "Ocultar Fechadas" : "Mostrar Fechadas"}
-            </Button>
-            <Button onClick={() => setShowFilters(!showFilters)} variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-1" />
-              Filtros
-            </Button>
-            <Button onClick={() => setIsAddingTask(true)} size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              Nova Tarefa
+              {showFilters ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+              {showFilters ? "Ocultar" : "Expandir"}
             </Button>
           </div>
         </CardHeader>
 
-        {/* Filtros Avançados */}
-        {showFilters && (
-          <CardContent className="border-t">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              <div>
-                <label className="text-sm font-medium">Data Início (opcional)</label>
-                <Input
-                  type="date"
-                  value={filters.startDate || ""}
-                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                />
+        <CardContent className="space-y-4">
+          {/* Linha 1: Controles principais */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-gray-300 font-medium whitespace-nowrap">Data:</label>
+              <Input
+                type="date"
+                value={selectedDate || ""}
+                onChange={(e) => onDateChange?.(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 w-40"
+              />
+            </div>
+
+            <Button
+              onClick={() => onDateChange?.(format(new Date(), "yyyy-MM-dd"))}
+              variant="outline"
+              size="sm"
+              className="border-orange-600 text-orange-300 hover:bg-orange-700 hover:text-white"
+            >
+              <Calendar className="h-4 w-4 mr-1" />
+              Hoje
+            </Button>
+
+            <Button
+              onClick={() => setFilters({ ...filters, showClosed: !filters.showClosed })}
+              variant={filters.showClosed ? "default" : "outline"}
+              size="sm"
+              className={
+                filters.showClosed
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "border-blue-600 text-blue-300 hover:bg-blue-700 hover:text-white"
+              }
+            >
+              {filters.showClosed ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+              {filters.showClosed ? "Ocultar Fechadas" : "Mostrar Fechadas"}
+            </Button>
+
+            <Button
+              onClick={refreshTasks}
+              disabled={refreshing}
+              variant="outline"
+              size="sm"
+              className="border-green-600 text-green-300 hover:bg-green-700 hover:text-white"
+            >
+              {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+              Atualizar
+            </Button>
+
+            <Button
+              onClick={() => setIsAddingTask(true)}
+              size="sm"
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Nova Tarefa
+            </Button>
+          </div>
+
+          {/* Filtros Avançados */}
+          {showFilters && (
+            <div className="border-t border-gray-700 pt-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">Período - Data Início</label>
+                  <Input
+                    type="date"
+                    value={filters.startDate || ""}
+                    onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">Período - Data Fim</label>
+                  <Input
+                    type="date"
+                    value={filters.endDate || ""}
+                    onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">Status</label>
+                  <Select
+                    value={filters.status?.[0] || "all"}
+                    onValueChange={(value) => setFilters({ ...filters, status: value === "all" ? [] : [value] })}
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                      <SelectValue placeholder="Todos os status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="in_progress">Em Andamento</SelectItem>
+                      <SelectItem value="completed">Concluído</SelectItem>
+                      <SelectItem value="paused">Pausado</SelectItem>
+                      <SelectItem value="blocked">Bloqueado</SelectItem>
+                      <SelectItem value="canceled">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">Cliente</label>
+                  <Select
+                    value={filters.clientTags?.[0] || "all"}
+                    onValueChange={(value) => setFilters({ ...filters, clientTags: value === "all" ? [] : [value] })}
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                      <SelectValue placeholder="Todos os clientes" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {clientTags.map((tag) => (
+                        <SelectItem key={tag.id} value={tag.name}>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                            <span>{tag.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Data Fim (opcional)</label>
-                <Input
-                  type="date"
-                  value={filters.endDate || ""}
-                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Status</label>
-                <Select
-                  value={filters.status?.[0] || "all"}
-                  onValueChange={(value) => setFilters({ ...filters, status: value === "all" ? [] : [value] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="in_progress">Em Andamento</SelectItem>
-                    <SelectItem value="completed">Concluído</SelectItem>
-                    <SelectItem value="paused">Pausado</SelectItem>
-                    <SelectItem value="blocked">Bloqueado</SelectItem>
-                    <SelectItem value="canceled">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Cliente</label>
-                <Select
-                  value={filters.clientTags?.[0] || "all"}
-                  onValueChange={(value) => setFilters({ ...filters, clientTags: value === "all" ? [] : [value] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os clientes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {clientTags.map((tag) => (
-                      <SelectItem key={tag.id} value={tag.name}>
-                        {tag.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              <div className="flex items-center justify-between">
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={searchTasks}
+                    disabled={searching}
+                    className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
+                  >
+                    {searching ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4 mr-1" />
+                    )}
+                    Pesquisar
+                  </Button>
+                  <Button
+                    onClick={clearFilters}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-600 text-red-300 hover:bg-red-700 hover:text-white"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Limpar Filtros
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  💡 Use os filtros para encontrar tarefas específicas por período, status ou cliente
+                </p>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex space-x-2">
-                <Button onClick={searchTasks} disabled={searching}>
-                  {searching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
-                  Pesquisar
-                </Button>
-                <Button onClick={clearFilters} variant="outline" size="sm">
-                  <X className="h-4 w-4 mr-1" />
-                  Limpar Filtros
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500">
-                💡 Dica: Status e Cliente são obrigatórios para pesquisa. Datas são opcionais.
-              </p>
-            </div>
-          </CardContent>
-        )}
+          )}
+        </CardContent>
 
         {/* Formulário de Nova Tarefa */}
         {isAddingTask && (
-          <CardContent className="border-t">
-            <div className="space-y-3 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+          <CardContent className="border-t border-gray-700">
+            <div className="space-y-3 p-4 border border-gray-600 rounded-lg bg-gray-800/50">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Input
                   placeholder="Título da tarefa"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && createTask()}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 />
-                <Input type="date" value={newTaskStartDate} onChange={(e) => setNewTaskStartDate(e.target.value)} />
+                <Input
+                  type="date"
+                  value={newTaskStartDate}
+                  onChange={(e) => setNewTaskStartDate(e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+                />
                 <Input
                   type="date"
                   placeholder="Data fim (opcional)"
                   value={newTaskEndDate}
                   onChange={(e) => setNewTaskEndDate(e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
 
@@ -547,10 +638,10 @@ export default function TaskList({ selectedDate }: TaskListProps) {
                 value={newTaskClientTags[0] || "none"}
                 onValueChange={(value) => setNewTaskClientTags(value === "none" ? [] : [value])}
               >
-                <SelectTrigger>
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                   <SelectValue placeholder="Selecionar cliente (opcional)" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-gray-800 border-gray-700">
                   <SelectItem value="none">Nenhum cliente</SelectItem>
                   {clientTags.map((tag) => (
                     <SelectItem key={tag.id} value={tag.name}>
@@ -575,12 +666,16 @@ export default function TaskList({ selectedDate }: TaskListProps) {
                   value={newTaskDescription}
                   onChange={(e) => setNewTaskDescription(e.target.value)}
                   rows={4}
-                  className="rounded-t-none border-t-0"
+                  className="rounded-t-none border-t-0 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
 
               <div className="flex space-x-2">
-                <Button onClick={createTask} size="sm">
+                <Button
+                  onClick={createTask}
+                  size="sm"
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                >
                   Adicionar
                 </Button>
                 <Button
@@ -598,6 +693,7 @@ export default function TaskList({ selectedDate }: TaskListProps) {
                   }}
                   variant="outline"
                   size="sm"
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
                 >
                   Cancelar
                 </Button>
@@ -609,9 +705,9 @@ export default function TaskList({ selectedDate }: TaskListProps) {
 
       {/* Debug Info */}
       {process.env.NODE_ENV === "development" && (
-        <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950">
+        <Card className="border-yellow-600 bg-yellow-900/20">
           <CardContent className="p-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            <p className="text-sm text-yellow-300">
               <strong>Debug:</strong> Total: {tasks.length} | Abertas: {openTasks.length} | Fechadas:{" "}
               {closedTasks.length}
             </p>
@@ -623,18 +719,18 @@ export default function TaskList({ selectedDate }: TaskListProps) {
       {openTasks.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold flex items-center">
-              <Users className="h-5 w-5 mr-2" />
+            <h3 className="text-lg font-semibold flex items-center text-white">
+              <Users className="h-5 w-5 mr-2 text-green-400" />
               Tarefas Abertas ({openTasks.length})
             </h3>
-            <Badge variant="secondary">{openTasks.length} em andamento</Badge>
+            <Badge className="bg-green-900/50 text-green-300 border-green-700">{openTasks.length} em andamento</Badge>
           </div>
           {openTasks.map((task) => (
             <div key={task.id} className="relative">
               <TaskItem task={task} onUpdate={updateTask} onDelete={deleteTask} />
               {calculateTaskDuration(task) && (
                 <div className="absolute top-2 right-2">
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs border-gray-600 text-gray-300">
                     {calculateTaskDuration(task)} dias
                   </Badge>
                 </div>
@@ -645,23 +741,25 @@ export default function TaskList({ selectedDate }: TaskListProps) {
       )}
 
       {/* Separador */}
-      {openTasks.length > 0 && closedTasks.length > 0 && filters.showClosed && <Separator className="my-6" />}
+      {openTasks.length > 0 && closedTasks.length > 0 && filters.showClosed && (
+        <Separator className="my-6 border-gray-700" />
+      )}
 
       {/* Tarefas Fechadas */}
       {closedTasks.length > 0 && filters.showClosed && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400">
-              Tarefas Fechadas ({closedTasks.length})
-            </h3>
-            <Badge variant="outline">{closedTasks.length} concluídas</Badge>
+            <h3 className="text-lg font-semibold text-gray-400">Tarefas Fechadas ({closedTasks.length})</h3>
+            <Badge variant="outline" className="border-gray-600 text-gray-400">
+              {closedTasks.length} concluídas
+            </Badge>
           </div>
           {closedTasks.map((task) => (
             <div key={task.id} className="relative opacity-75">
               <TaskItem task={task} onUpdate={updateTask} onDelete={deleteTask} />
               {calculateTaskDuration(task) && (
                 <div className="absolute top-2 right-2">
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs border-gray-600 text-gray-400">
                     {calculateTaskDuration(task)} dias
                   </Badge>
                 </div>
@@ -675,8 +773,8 @@ export default function TaskList({ selectedDate }: TaskListProps) {
       {tasks.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Nenhuma tarefa encontrada</p>
-          <p className="text-sm">Clique em "Nova Tarefa" para começar</p>
+          <p className="text-gray-400">Nenhuma tarefa encontrada</p>
+          <p className="text-sm text-gray-500">Clique em "Nova Tarefa" para começar</p>
         </div>
       )}
     </div>

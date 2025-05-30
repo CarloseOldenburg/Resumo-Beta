@@ -856,9 +856,7 @@ export default function AdminPanel() {
                     Use o botão <strong>Testar Integração</strong> para validar se está tudo funcionando.
                   </li>
                 </ol>
-                <p className="text-sm mt-2">
-                  ⚠️ <strong>Importante:</strong> OpenAI é usado como backup. O Groq é o provedor principal de IA.
-                </p>
+                <p className="text-sm mt-2">⚠️ Importante: OpenAI é a IA principal. O Groq é usado como backup.</p>
               </div>
             </AlertDescription>
           </Alert>
@@ -867,9 +865,9 @@ export default function AdminPanel() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Key className="h-5 w-5 mr-2" />
-                Configurações da API OpenAI (Backup)
+                Configurações da API OpenAI (Principal)
               </CardTitle>
-              <CardDescription>Configure a integração com OpenAI como backup para o Groq</CardDescription>
+              <CardDescription>Configure a integração com OpenAI como IA principal</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

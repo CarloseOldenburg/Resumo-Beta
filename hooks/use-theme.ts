@@ -5,25 +5,31 @@ import { useEffect, useState } from "react"
 type Theme = "light" | "dark"
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>("light")
+  const [theme, setTheme] = useState<Theme>("dark") // Padrão escuro
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
+
+    // Aplicar tema escuro imediatamente
+    document.documentElement.classList.add("dark")
+
     // Verificar preferência salva
     const savedTheme = localStorage.getItem("qa-manager-theme") as Theme
     if (savedTheme) {
       setTheme(savedTheme)
+      applyTheme(savedTheme)
     } else {
-      // Verificar preferência do sistema
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-      setTheme(systemTheme)
+      // Definir modo escuro como padrão e salvar
+      setTheme("dark")
+      applyTheme("dark")
+      localStorage.setItem("qa-manager-theme", "dark")
     }
   }, [])
 
   const applyTheme = (newTheme: Theme) => {
     if (typeof window === "undefined") return
-    
+
     const root = document.documentElement
     if (newTheme === "dark") {
       root.classList.add("dark")
@@ -34,7 +40,7 @@ export function useTheme() {
 
   const toggleTheme = () => {
     if (!mounted) return
-    
+
     const newTheme = theme === "light" ? "dark" : "light"
     setTheme(newTheme)
     applyTheme(newTheme)
@@ -43,7 +49,7 @@ export function useTheme() {
 
   const setThemeMode = (newTheme: Theme) => {
     if (!mounted) return
-    
+
     setTheme(newTheme)
     applyTheme(newTheme)
     localStorage.setItem("qa-manager-theme", newTheme)

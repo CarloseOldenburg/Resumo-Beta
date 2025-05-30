@@ -11,6 +11,9 @@ export default function LoginPage() {
   const router = useRouter()
 
   useEffect(() => {
+    // Aplicar tema escuro imediatamente
+    document.documentElement.classList.add("dark")
+
     // Verificação simples sem usar o hook useAuth para evitar loops
     const checkAuth = () => {
       try {
@@ -35,10 +38,14 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-700">Carregando...</h2>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+        <div className="text-center fade-in">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div className="absolute inset-0 rounded-full h-16 w-16 border-t-2 border-purple-500 animate-ping mx-auto"></div>
+          </div>
+          <h2 className="text-xl font-semibold text-white">Carregando...</h2>
+          <p className="text-gray-400 mt-2">Verificando autenticação</p>
         </div>
       </div>
     )
@@ -46,10 +53,14 @@ export default function LoginPage() {
 
   if (isAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-700">Redirecionando...</h2>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+        <div className="text-center fade-in">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500 mx-auto mb-4"></div>
+            <div className="absolute inset-0 rounded-full h-16 w-16 border-t-2 border-blue-500 animate-ping mx-auto"></div>
+          </div>
+          <h2 className="text-xl font-semibold text-white">Redirecionando...</h2>
+          <p className="text-gray-400 mt-2">Entrando no dashboard</p>
         </div>
       </div>
     )
