@@ -1,16 +1,15 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from 'next/font/google'
+import { Inter } from "next/font/google"
 import "./globals.css"
-import { AuthProvider } from "@/components/auth/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
-import { ThemeProvider } from "@/components/providers/theme-provider"
+import RouteGuard from "@/components/auth/route-guard"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "QA Task Manager",
-  description: "Gerencie suas tarefas e gere resumos para daily meetings",
+  title: "Resumo Beta",
+  description: "Gerenciador de tarefas para QA",
     generator: 'v0.dev'
 }
 
@@ -20,14 +19,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR">
-      <body className={inter.className}>
-        <ThemeProvider>
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
-        </ThemeProvider>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
+        <RouteGuard>{children}</RouteGuard>
+        <Toaster />
       </body>
     </html>
   )

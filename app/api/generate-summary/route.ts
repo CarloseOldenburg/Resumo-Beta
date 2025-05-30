@@ -13,20 +13,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Default user not found" }, { status: 404 })
     }
 
-    // Buscar a chave da API OpenAI
-    const { data: apiKeySetting } = await supabase
-      .from("system_settings")
-      .select("value")
-      .eq("key", "openai_api_key")
-      .single()
-
-    // Buscar o modelo da OpenAI
-    const { data: modelSetting } = await supabase
-      .from("system_settings")
-      .select("value")
-      .eq("key", "openai_model")
-      .single()
-
     // Preparar os dados para o prompt
     const completedTasks = body.completed_tasks || []
     const manualSummary = body.manual_summary || ""
@@ -34,9 +20,93 @@ export async function POST(request: NextRequest) {
 
     let generatedSummary = ""
     let usedFallback = false
+    let aiProvider = "fallback"
 
-    // Verificar se a API OpenAI está configurada e tentar usar
-    if (apiKeySetting?.value && apiKeySetting.value.trim() && apiKeySetting.value.startsWith("sk-")) {
+    // Função para gerar resumo usando Groq (principal)
+    async function generateSummaryWithGroq(
+      completedTasks: any[],
+      manualSummary: string,
+      summaryDate: string,
+    ): Promise<string> {
+      const groqApiKey = process.env.GROQ_API_KEY
+
+      if (!groqApiKey) {
+        throw new Error("GROQ_API_KEY não configurada")
+      }
+
+      // Formatar as tarefas concluídas
+      const tasksText = completedTasks.length
+        ? completedTasks
+            .map((task: any) => `- ${task.title}${task.description ? `: ${task.description}` : ""}`)
+            .join("\n")
+        : "Nenhuma tarefa concluída registrada."
+
+      // Criar o prompt para o Groq
+      const prompt = `
+Você é um assistente que ajuda um analista de QA Testes Beta a criar resumos para reuniões diárias (daily). O resumo deve ser claro, objetivo e no formato: 
+- O que fiz ontem
+- O que farei hoje
+- Impedimentos (se houver).
+
+Dados fornecidos:
+- Data: ${summaryDate}
+- Tarefas concluídas: 
+${tasksText}
+
+- Resumo manual: 
+${manualSummary || "Nenhum resumo manual fornecido."}
+
+Por favor, gere um resumo profissional e conciso para a reunião daily, mantendo o formato solicitado.
+Use emojis para tornar o resumo mais visual e organize bem as informações.
+`
+
+      const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7,
+          max_tokens: 1500,
+        }),
+      })
+
+      if (!groqResponse.ok) {
+        const errorData = await groqResponse.json()
+        throw new Error(`Groq API error: ${errorData.error?.message || "Unknown error"}`)
+      }
+
+      const groqData = await groqResponse.json()
+      return groqData.choices[0].message.content
+    }
+
+    // Função para gerar resumo usando OpenAI (fallback)
+    async function generateSummaryWithOpenAI(
+      completedTasks: any[],
+      manualSummary: string,
+      summaryDate: string,
+    ): Promise<string> {
+      // Buscar a chave da API OpenAI
+      const { data: apiKeySetting } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "openai_api_key")
+        .single()
+
+      // Buscar o modelo da OpenAI
+      const { data: modelSetting } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "openai_model")
+        .single()
+
+      if (!apiKeySetting?.value || !apiKeySetting.value.trim() || !apiKeySetting.value.startsWith("sk-")) {
+        throw new Error("OpenAI API key não configurada")
+      }
+
       const apiKey = apiKeySetting.value.trim()
       const model = modelSetting?.value || "gpt-4o"
 
@@ -47,7 +117,6 @@ export async function POST(request: NextRequest) {
             .join("\n")
         : "Nenhuma tarefa concluída registrada."
 
-      // Criar o prompt para o OpenAI
       const prompt = `
 Você é um assistente que ajuda um analista de QA Testes Beta a criar resumos para reuniões diárias (daily). O resumo deve ser claro, objetivo e no formato: 
 - O que fiz ontem
@@ -65,44 +134,49 @@ ${manualSummary || "Nenhum resumo manual fornecido."}
 Por favor, gere um resumo profissional e conciso para a reunião daily, mantendo o formato solicitado.
 `
 
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+      })
+
+      if (!openaiResponse.ok) {
+        const errorData = await openaiResponse.json()
+        throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`)
+      }
+
+      const openaiData = await openaiResponse.json()
+      return openaiData.choices[0].message.content
+    }
+
+    // Tentar Groq primeiro (principal)
+    try {
+      console.log("Tentando gerar resumo com Groq...")
+      generatedSummary = await generateSummaryWithGroq(completedTasks, manualSummary, summaryDate)
+      aiProvider = "groq"
+      console.log("✅ Resumo gerado com sucesso pelo Groq")
+    } catch (groqError) {
+      console.warn("❌ Groq falhou, tentando OpenAI...", groqError)
+
+      // Tentar OpenAI como fallback
       try {
-        console.log("Tentando conectar com OpenAI...")
-
-        // Chamar a API do OpenAI
-        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            max_tokens: 1000,
-          }),
-        })
-
-        if (openaiResponse.ok) {
-          const openaiData = await openaiResponse.json()
-          generatedSummary = openaiData.choices[0].message.content
-          console.log("Resumo gerado com sucesso pela OpenAI")
-        } else {
-          const errorData = await openaiResponse.json()
-          console.warn("OpenAI API failed:", errorData)
-          generatedSummary = generateFallbackSummary(completedTasks, manualSummary, summaryDate)
-          usedFallback = true
-        }
-      } catch (error) {
-        console.warn("OpenAI API error:", error)
+        generatedSummary = await generateSummaryWithOpenAI(completedTasks, manualSummary, summaryDate)
+        aiProvider = "openai"
+        console.log("✅ Resumo gerado com sucesso pelo OpenAI")
+      } catch (openaiError) {
+        console.warn("❌ OpenAI também falhou, usando fallback manual...", openaiError)
         generatedSummary = generateFallbackSummary(completedTasks, manualSummary, summaryDate)
         usedFallback = true
+        aiProvider = "fallback"
       }
-    } else {
-      // Se não há chave da API válida, usar fallback
-      console.warn("No valid OpenAI API key configured, using fallback summary")
-      generatedSummary = generateFallbackSummary(completedTasks, manualSummary, summaryDate)
-      usedFallback = true
     }
 
     // Salvar o resumo gerado no banco de dados
@@ -156,8 +230,9 @@ Por favor, gere um resumo profissional e conciso para a reunião daily, mantendo
       result = data
     }
 
-    // Adicionar informação se foi usado fallback
+    // Adicionar informações sobre qual IA foi usada
     result.usedFallback = usedFallback
+    result.aiProvider = aiProvider
 
     return NextResponse.json(result)
   } catch (error) {
@@ -166,7 +241,7 @@ Por favor, gere um resumo profissional e conciso para a reunião daily, mantendo
   }
 }
 
-// Função para gerar resumo de fallback quando a OpenAI não está disponível
+// Função para gerar resumo de fallback quando nenhuma IA está disponível
 function generateFallbackSummary(completedTasks: any[], manualSummary: string, summaryDate: string): string {
   const date = new Date(summaryDate).toLocaleDateString("pt-BR", {
     weekday: "long",
@@ -212,8 +287,9 @@ function generateFallbackSummary(completedTasks: any[], manualSummary: string, s
   }
 
   summary += "\n---\n"
-  summary += "⚠️ Resumo gerado automaticamente (OpenAI indisponível)\n"
-  summary += "💡 Configure sua chave da API OpenAI no painel administrativo para resumos mais detalhados"
+  summary += "⚠️ Resumo gerado automaticamente (Groq e OpenAI indisponíveis)\n"
+  summary +=
+    "💡 Configure sua chave da API OpenAI ou verifique a integração Groq no painel administrativo para resumos mais detalhados"
 
   return summary
 }

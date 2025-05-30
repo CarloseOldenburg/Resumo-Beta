@@ -48,6 +48,18 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Default user not found" }, { status: 404 })
     }
 
+    // Verificar se a tarefa existe e pertence ao usuário
+    const { data: existingTask } = await supabase
+      .from("tasks")
+      .select("id")
+      .eq("id", params.id)
+      .eq("user_id", defaultUser.id)
+      .single()
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "Task not found or access denied" }, { status: 404 })
+    }
+
     // Deletar tarefa
     const { error } = await supabase.from("tasks").delete().eq("id", params.id).eq("user_id", defaultUser.id)
 
@@ -56,7 +68,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Failed to delete task" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, message: "Task deleted successfully" })
   } catch (error) {
     console.error("Error in DELETE /api/tasks/[id]:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

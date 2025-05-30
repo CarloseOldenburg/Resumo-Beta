@@ -2,21 +2,47 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
+  // Default settings to return on any error
+  const defaultSettings = [
+    { key: "app_name", value: "Resumo Beta", description: "Nome da aplicação" },
+    {
+      key: "app_description",
+      value: "Gerencie suas tarefas e gere resumos para daily meetings",
+      description: "Descrição da aplicação",
+    },
+    { key: "openai_api_key", value: "", description: "Chave da API OpenAI" },
+    { key: "openai_model", value: "gpt-4o", description: "Modelo da OpenAI" },
+  ]
+
   try {
     const supabase = createServerClient()
 
-    // Buscar configurações (sem verificação de autenticação para desenvolvimento)
-    const { data: settings, error } = await supabase.from("system_settings").select("*").order("key")
+    // Add a timeout to prevent hanging requests
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timeout")), 5000))
+
+    const queryPromise = supabase.from("system_settings").select("*").order("key")
+
+    const { data: settings, error } = (await Promise.race([queryPromise, timeoutPromise])) as any
 
     if (error) {
-      console.error("Error fetching settings:", error)
-      return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 })
+      console.error("Supabase error:", error)
+      return NextResponse.json(defaultSettings)
     }
 
-    return NextResponse.json(settings || [])
+    if (!settings || settings.length === 0) {
+      // Try to insert default settings
+      try {
+        await supabase.from("system_settings").insert(defaultSettings)
+      } catch (insertError) {
+        console.error("Error inserting default settings:", insertError)
+      }
+      return NextResponse.json(defaultSettings)
+    }
+
+    return NextResponse.json(settings)
   } catch (error) {
-    console.error("Error in GET /api/admin/settings:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error in settings API:", error)
+    return NextResponse.json(defaultSettings)
   }
 }
 
@@ -29,22 +55,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Key is required" }, { status: 400 })
     }
 
-    // Primeiro, verificar se a configuração já existe
-    const { data: existingSetting, error: fetchError } = await supabase
-      .from("system_settings")
-      .select("*")
-      .eq("key", key)
-      .maybeSingle()
-
-    if (fetchError) {
-      console.error("Error checking existing setting:", fetchError)
-      return NextResponse.json({ error: "Failed to check existing setting" }, { status: 500 })
-    }
+    // First, check if the setting exists
+    const { data: existingSetting } = await supabase.from("system_settings").select("*").eq("key", key).maybeSingle()
 
     let result
 
     if (existingSetting) {
-      // Atualizar configuração existente
+      // Update existing setting
       const { data: updatedSetting, error: updateError } = await supabase
         .from("system_settings")
         .update({
@@ -62,7 +79,7 @@ export async function PATCH(request: NextRequest) {
 
       result = updatedSetting
     } else {
-      // Criar nova configuração
+      // Create new setting
       const { data: newSetting, error: insertError } = await supabase
         .from("system_settings")
         .insert({
@@ -90,7 +107,6 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// Função auxiliar para obter descrições padrão
 function getDefaultDescription(key: string): string {
   const descriptions: Record<string, string> = {
     app_name: "Nome da aplicação que aparece no header",

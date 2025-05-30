@@ -24,9 +24,10 @@ export default function LoginForm() {
 
     if (!email || !password) {
       toast({
-        title: "Erro",
+        title: "❌ Erro",
         description: "Preencha todos os campos",
         variant: "destructive",
+        duration: 5000,
       })
       return
     }
@@ -37,22 +38,26 @@ export default function LoginForm() {
 
       if (result.isAuthenticated) {
         toast({
-          title: "Sucesso",
-          description: "Login realizado com sucesso!",
+          title: "✅ Login realizado com sucesso!",
+          description: "Redirecionando para o dashboard...",
+          duration: 6000,
         })
-        router.push("/")
+        // Usar redirecionamento direto em vez de router.push para evitar problemas de estado
+        window.location.href = "/dashboard"
       } else {
         toast({
-          title: "Erro no login",
+          title: "❌ Falha no login",
           description: result.error || "Credenciais inválidas",
           variant: "destructive",
+          duration: 6000,
         })
       }
     } catch (error: any) {
       toast({
-        title: "Erro no login",
+        title: "❌ Erro no login",
         description: error.message || "Ocorreu um erro ao fazer login",
         variant: "destructive",
+        duration: 6000,
       })
     } finally {
       setLoading(false)
@@ -63,7 +68,7 @@ export default function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">QA Task Manager</CardTitle>
+          <CardTitle className="text-2xl font-bold">Resumo Beta</CardTitle>
           <CardDescription>Gerencie suas tarefas e gere resumos para daily meetings</CardDescription>
         </CardHeader>
         <CardContent>
@@ -73,7 +78,7 @@ export default function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="seu@email.com"
+                placeholder="Digite seu email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
@@ -84,7 +89,7 @@ export default function LoginForm() {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Digite sua senha"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}

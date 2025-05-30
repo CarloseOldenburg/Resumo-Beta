@@ -18,9 +18,23 @@ export interface Task {
   status: "pending" | "completed" | "canceled" | "paused" | "blocked" | "in_progress"
   completed: boolean
   task_date: string
+  start_date?: string
+  end_date?: string
+  client_tags?: string[]
+  estimated_hours?: number
+  actual_hours?: number
   created_at: string
   updated_at: string
   tag?: string
+}
+
+export interface ClientTag {
+  id: string
+  name: string
+  color: string
+  description?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface DailySummary {
@@ -38,7 +52,10 @@ export interface CreateTaskData {
   title: string
   description?: string
   task_date?: string
+  start_date?: string
+  end_date?: string
   status?: string
+  client_tags?: string[]
   tag?: string
 }
 
@@ -47,6 +64,9 @@ export interface UpdateTaskData {
   description?: string
   status?: "pending" | "completed" | "canceled" | "paused" | "blocked" | "in_progress"
   completed?: boolean
+  start_date?: string
+  end_date?: string
+  client_tags?: string[]
   tag?: string
 }
 
@@ -62,4 +82,12 @@ export interface SystemSettings {
 export interface AppConfig {
   title: string
   description: string
+}
+
+export interface TaskFilters {
+  startDate?: string
+  endDate?: string
+  status?: string[]
+  clientTags?: string[]
+  showClosed?: boolean
 }

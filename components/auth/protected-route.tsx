@@ -4,28 +4,35 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth"
+import { isUserAuthenticated } from "@/lib/auth"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, loading } = useAuth()
-  const router = useRouter()
   const [isChecking, setIsChecking] = useState(true)
+  const [isAuth, setIsAuth] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (!isAuthenticated) {
-        router.push("/login")
-      } else {
-        setIsChecking(false)
-      }
-    }
-  }, [isAuthenticated, loading, router])
+    // Verificação simples sem usar o hook useAuth para evitar loops
+    const checkAuth = () => {
+      const authenticated = isUserAuthenticated()
 
-  if (loading || isChecking) {
+      if (!authenticated) {
+        router.push("/login")
+        return
+      }
+
+      setIsAuth(true)
+      setIsChecking(false)
+    }
+
+    checkAuth()
+  }, [router])
+
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
@@ -36,9 +43,5 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
-  if (!isAuthenticated) {
-    return null
-  }
-
-  return <>{children}</>
+  return isAuth ? <>{children}</> : null
 }

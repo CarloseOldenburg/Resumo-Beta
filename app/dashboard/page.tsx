@@ -15,14 +15,11 @@ import {
   AlertTriangle,
   FileText,
   TrendingUp,
-  Calendar,
-  Eye,
   Loader2,
+  Users,
+  Database,
 } from "lucide-react"
-import { format, parseISO } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import Link from "next/link"
-import type { DailySummary } from "@/lib/types"
 
 interface DashboardStats {
   totalTasks: number
@@ -33,7 +30,8 @@ interface DashboardStats {
   blockedTasks: number
   inProgressTasks: number
   totalSummaries: number
-  recentSummaries: DailySummary[]
+  averageTaskDuration: number
+  recentSummaries: any[]
 }
 
 export default function DashboardPage() {
@@ -47,9 +45,12 @@ export default function DashboardPage() {
     blockedTasks: 0,
     inProgressTasks: 0,
     totalSummaries: 0,
+    averageTaskDuration: 0,
     recentSummaries: [],
   })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -60,30 +61,80 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
+      setError(null)
+      setWarning(null)
 
-      // Usar a nova API de dashboard para obter todas as estatísticas de uma vez
-      const dashboardResponse = await fetch("/api/dashboard")
+      console.log("Dashboard: Fetching data...")
+      const response = await fetch("/api/dashboard")
 
-      if (!dashboardResponse.ok) {
-        throw new Error(`API responded with status: ${dashboardResponse.status}`)
+      console.log("Dashboard: Response status:", response.status)
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`)
       }
 
-      const dashboardData = await dashboardResponse.json()
+      const data = await response.json()
+      console.log("Dashboard: Response data:", data)
 
-      if (dashboardData.stats) {
-        setStats(dashboardData.stats)
+      // Verificar se há erro na resposta
+      if (data.error) {
+        setError(data.error)
+        if (data.details) {
+          console.error("Dashboard error details:", data.details)
+        }
       }
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error)
+
+      // Verificar se há mensagem de aviso
+      if (data.message) {
+        setWarning(data.message)
+      }
+
+      // Garantir que todos os campos existam
+      const safeStats = {
+        totalTasks: data.stats?.totalTasks || 0,
+        completedTasks: data.stats?.completedTasks || 0,
+        pendingTasks: data.stats?.pendingTasks || 0,
+        canceledTasks: data.stats?.canceledTasks || 0,
+        pausedTasks: data.stats?.pausedTasks || 0,
+        blockedTasks: data.stats?.blockedTasks || 0,
+        inProgressTasks: data.stats?.inProgressTasks || 0,
+        totalSummaries: data.stats?.totalSummaries || 0,
+        averageTaskDuration: data.stats?.averageTaskDuration || 0,
+        recentSummaries: data.stats?.recentSummaries || [],
+      }
+
+      setStats(safeStats)
+      console.log("Dashboard: Stats set:", safeStats)
+    } catch (error: any) {
+      console.error("Dashboard: Erro ao carregar dashboard:", error)
+      setError(error.message || "Erro desconhecido ao carregar dashboard")
     } finally {
       setLoading(false)
     }
   }
 
-  if (authLoading || !isAuthenticated) {
+  // Loading state
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Verificando autenticação...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Você precisa fazer login para acessar o dashboard.</p>
+          <Link href="/login">
+            <Button>Fazer Login</Button>
+          </Link>
+        </div>
       </div>
     )
   }
@@ -100,6 +151,48 @@ export default function DashboardPage() {
           <p className="text-gray-600">Visão geral das suas atividades e produtividade</p>
         </div>
 
+        {/* Warning State */}
+        {warning && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center">
+              <Database className="h-5 w-5 text-yellow-600 mr-2" />
+              <div>
+                <p className="text-yellow-800 font-medium">Configuração Necessária</p>
+                <p className="text-yellow-700 text-sm">{warning}</p>
+              </div>
+            </div>
+            <Link href="/admin">
+              <Button variant="outline" size="sm" className="mt-2">
+                Configurar Banco de Dados
+              </Button>
+            </Link>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+              <div>
+                <p className="text-red-800 font-medium">Erro ao carregar dados</p>
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Button onClick={fetchDashboardData} variant="outline" size="sm">
+                Tentar Novamente
+              </Button>
+              <Link href="/admin">
+                <Button variant="outline" size="sm">
+                  Verificar Configurações
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
@@ -109,7 +202,7 @@ export default function DashboardPage() {
           <>
             {/* Estatísticas Principais */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card>
+              <Card className="bg-white shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -121,7 +214,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -133,7 +226,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -145,14 +238,14 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Resumos Gerados</p>
-                      <p className="text-3xl font-bold text-purple-600">{stats.totalSummaries}</p>
+                      <p className="text-sm font-medium text-gray-600">Duração Média</p>
+                      <p className="text-3xl font-bold text-purple-600">{stats.averageTaskDuration} dias</p>
                     </div>
-                    <FileText className="h-8 w-8 text-purple-600" />
+                    <Clock className="h-8 w-8 text-purple-600" />
                   </div>
                 </CardContent>
               </Card>
@@ -160,7 +253,7 @@ export default function DashboardPage() {
 
             {/* Detalhamento por Status */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              <Card>
+              <Card className="bg-white shadow-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <BarChart3 className="h-5 w-5 mr-2" />
@@ -171,10 +264,10 @@ export default function DashboardPage() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <Clock className="h-4 w-4 text-gray-500 mr-2" />
-                        <span className="text-sm">Pendentes</span>
+                        <div className="h-4 w-4 bg-blue-500 rounded-full mr-2" />
+                        <span className="text-sm">Em Andamento</span>
                       </div>
-                      <Badge variant="outline">{stats.pendingTasks}</Badge>
+                      <Badge className="bg-blue-500">{stats.inProgressTasks}</Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
@@ -185,10 +278,10 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <div className="h-4 w-4 bg-blue-500 rounded-full mr-2" />
-                        <span className="text-sm">Em Andamento</span>
+                        <Clock className="h-4 w-4 text-gray-500 mr-2" />
+                        <span className="text-sm">Pendentes</span>
                       </div>
-                      <Badge className="bg-blue-500">{stats.inProgressTasks}</Badge>
+                      <Badge variant="outline">{stats.pendingTasks}</Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
@@ -215,7 +308,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white shadow-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     <div className="flex items-center">
@@ -232,26 +325,13 @@ export default function DashboardPage() {
                 <CardContent>
                   {stats.recentSummaries.length > 0 ? (
                     <div className="space-y-3">
-                      {stats.recentSummaries.map((summary) => (
-                        <div key={summary.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      {stats.recentSummaries.slice(0, 5).map((summary, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                           <div>
-                            <div className="font-medium text-sm">
-                              {format(parseISO(summary.summary_date), "dd 'de' MMMM", { locale: ptBR })}
-                            </div>
-                            <div className="text-xs text-gray-500">{format(parseISO(summary.created_at), "HH:mm")}</div>
+                            <div className="font-medium text-sm">Resumo {index + 1}</div>
+                            <div className="text-xs text-gray-500">Recente</div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            {summary.generated_summary ? (
-                              <Badge variant="secondary">Gerado</Badge>
-                            ) : (
-                              <Badge variant="outline">Manual</Badge>
-                            )}
-                            <Link href={`/resumos?date=${summary.summary_date}`}>
-                              <Button size="sm" variant="ghost">
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </Link>
-                          </div>
+                          <Badge variant="secondary">Gerado</Badge>
                         </div>
                       ))}
                     </div>
@@ -271,7 +351,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Ações Rápidas */}
-            <Card>
+            <Card className="bg-white shadow-sm">
               <CardHeader>
                 <CardTitle>Ações Rápidas</CardTitle>
               </CardHeader>
@@ -283,16 +363,16 @@ export default function DashboardPage() {
                       Gerenciar Tarefas
                     </Button>
                   </Link>
+                  <Link href="/gerador-tarefas">
+                    <Button className="w-full" variant="outline">
+                      <Users className="h-4 w-4 mr-2" />
+                      Gerador de Tarefas
+                    </Button>
+                  </Link>
                   <Link href="/gerar-resumo">
                     <Button className="w-full" variant="outline">
                       <FileText className="h-4 w-4 mr-2" />
                       Gerar Resumo
-                    </Button>
-                  </Link>
-                  <Link href="/resumos">
-                    <Button className="w-full" variant="outline">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Ver Histórico
                     </Button>
                   </Link>
                   <Link href="/admin">

@@ -88,12 +88,14 @@ export function isUserAuthenticated(): boolean {
 // Hook para verificar autenticação
 export function useAuth(): AuthState {
   const [authState, setAuthState] = useState<AuthState>({
-    isAuthenticated: false,
-    loading: true,
+    isAuthenticated: typeof window !== "undefined" ? isUserAuthenticated() : false,
+    loading: typeof window !== "undefined",
     error: null,
   })
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
     const checkAuth = () => {
       try {
         const authenticated = isUserAuthenticated()
