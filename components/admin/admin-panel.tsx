@@ -29,12 +29,12 @@ import {
   Download,
   Tag,
   Palette,
-  Wrench,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { SystemSettings } from "@/lib/types"
 import { useTheme } from "@/hooks/use-theme"
 import { useAutoBackup } from "@/hooks/use-auto-backup"
+import { getCurrentUser } from "@/lib/auth"
 import ClientTagManager from "./client-tag-manager"
 import SystemMonitor from "./system-monitor"
 
@@ -44,30 +44,6 @@ interface UserData {
   name: string
   role: string
   created_at: string
-}
-
-interface DiagnosticResult {
-  database?: {
-    status: string
-    message: string
-    details?: any
-  }
-  groq?: {
-    status: string
-    message: string
-    details?: any
-  }
-  openai?: {
-    status: string
-    message: string
-    details?: any
-  }
-  tables?: {
-    status: string
-    message: string
-    details?: any
-  }
-  environment?: Record<string, any>
 }
 
 export default function AdminPanel() {
@@ -80,8 +56,6 @@ export default function AdminPanel() {
   const [testing, setTesting] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [setupingDb, setSetupingDb] = useState(false)
-  const [runningDiagnostic, setRunningDiagnostic] = useState(false)
   const [appTitle, setAppTitle] = useState("Resumo Beta")
   const [appDescription, setAppDescription] = useState("Gerencie suas tarefas e gere resumos para daily meetings")
   const [openaiKey, setOpenaiKey] = useState("")
@@ -93,8 +67,15 @@ export default function AdminPanel() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; testResponse?: string } | null>(
     null,
   )
-  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null)
+  const [newUserEmail, setNewUserEmail] = useState("")
+  const [newUserPassword, setNewUserPassword] = useState("")
+  const [newUserName, setNewUserName] = useState("")
+  const [creatingUser, setCreatingUser] = useState(false)
   const { toast } = useToast()
+
+  // Verificar se o usuário atual é o super admin
+  const currentUser = getCurrentUser()
+  const isSuperAdmin = currentUser?.email === "carlos.oldenburg@videosoft.com.br"
 
   useEffect(() => {
     fetchData()
@@ -137,18 +118,20 @@ export default function AdminPanel() {
         console.error("Error fetching settings:", error)
       }
 
-      // Buscar usuários
-      try {
-        const usersResponse = await fetch("/api/admin/users", {
-          headers: { Accept: "application/json" },
-        })
+      // Buscar usuários (apenas para super admin)
+      if (isSuperAdmin) {
+        try {
+          const usersResponse = await fetch("/api/admin/users", {
+            headers: { Accept: "application/json" },
+          })
 
-        if (usersResponse.ok) {
-          const usersData = await usersResponse.json()
-          setUsers(usersData)
+          if (usersResponse.ok) {
+            const usersData = await usersResponse.json()
+            setUsers(usersData)
+          }
+        } catch (error) {
+          console.error("Error fetching users:", error)
         }
-      } catch (error) {
-        console.error("Error fetching users:", error)
       }
     } catch (error) {
       console.error("General error in fetchData:", error)
@@ -163,67 +146,59 @@ export default function AdminPanel() {
     }
   }
 
-  const setupDatabase = async () => {
-    try {
-      setSetupingDb(true)
-      console.log("🔄 Iniciando configuração do banco...")
-
-      const response = await fetch("/api/admin/setup-database", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      console.log("Status da resposta:", response.status)
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const textResponse = await response.text()
-        console.error("Resposta não é JSON:", textResponse)
-        throw new Error(`Servidor retornou erro: ${textResponse.substring(0, 100)}...`)
-      }
-
-      const data = await response.json()
-      console.log("Resposta da API:", data)
-
-      if (data.success) {
-        toast({
-          title: "✅ Banco Configurado!",
-          description: `${data.stats.tables} tabelas, ${data.stats.users} usuários, ${data.stats.settings} configurações`,
-          duration: 8000,
-        })
-
-        if (data.admin) {
-          toast({
-            title: "🔐 Credenciais Admin",
-            description: `Email: ${data.admin.email} | Senha: ${data.admin.password}`,
-            duration: 10000,
-          })
-        }
-
-        setTimeout(() => {
-          fetchData()
-        }, 1000)
-      } else {
-        toast({
-          title: "❌ Erro",
-          description: data.error || "Erro ao configurar banco de dados",
-          variant: "destructive",
-          duration: 8000,
-        })
-      }
-    } catch (error) {
-      console.error("Erro ao configurar banco:", error)
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+  const createUser = async () => {
+    if (!newUserEmail || !newUserPassword || !newUserName) {
       toast({
         title: "❌ Erro",
-        description: `Erro de conexão: ${errorMessage}`,
+        description: "Preencha todos os campos obrigatórios",
         variant: "destructive",
-        duration: 8000,
+        duration: 5000,
+      })
+      return
+    }
+
+    try {
+      setCreatingUser(true)
+
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: newUserEmail,
+          password: newUserPassword,
+          name: newUserName,
+          role: "user",
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao criar usuário")
+      }
+
+      toast({
+        title: "✅ Sucesso",
+        description: `Usuário ${newUserName} criado com sucesso!`,
+        duration: 5000,
+      })
+
+      // Limpar formulário
+      setNewUserEmail("")
+      setNewUserPassword("")
+      setNewUserName("")
+
+      // Recarregar lista de usuários
+      fetchData()
+    } catch (error: any) {
+      toast({
+        title: "❌ Erro",
+        description: error.message || "Não foi possível criar o usuário",
+        variant: "destructive",
+        duration: 5000,
       })
     } finally {
-      setSetupingDb(false)
+      setCreatingUser(false)
     }
   }
 
@@ -258,7 +233,7 @@ export default function AdminPanel() {
       toast({
         title: "✅ Sucesso",
         description: "Configurações da aplicação atualizadas com sucesso!",
-        duration: 6000,
+        duration: 5000,
       })
 
       setTimeout(() => {
@@ -269,7 +244,7 @@ export default function AdminPanel() {
         title: "❌ Erro",
         description: "Não foi possível atualizar as configurações",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setSaving(false)
@@ -291,14 +266,14 @@ export default function AdminPanel() {
       toast({
         title: "✅ Sucesso",
         description: "Tema personalizado aplicado com sucesso!",
-        duration: 6000,
+        duration: 5000,
       })
     } catch (error) {
       toast({
         title: "❌ Erro",
         description: "Não foi possível atualizar o tema",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setSaving(false)
@@ -315,7 +290,7 @@ export default function AdminPanel() {
           title: "❌ Erro",
           description: "Formato da chave inválido. A chave deve começar com 'sk-'",
           variant: "destructive",
-          duration: 6000,
+          duration: 5000,
         })
         return
       }
@@ -326,7 +301,7 @@ export default function AdminPanel() {
       toast({
         title: "✅ Sucesso",
         description: "Configurações da OpenAI salvas com sucesso",
-        duration: 6000,
+        duration: 5000,
       })
 
       if (openaiKey.trim()) {
@@ -337,7 +312,7 @@ export default function AdminPanel() {
         title: "❌ Erro",
         description: "Não foi possível salvar as configurações",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setSaving(false)
@@ -360,14 +335,14 @@ export default function AdminPanel() {
         toast({
           title: "✅ Sucesso",
           description: result.message,
-          duration: 6000,
+          duration: 5000,
         })
       } else {
         toast({
           title: "❌ Erro na Integração",
           description: result.error,
           variant: "destructive",
-          duration: 6000,
+          duration: 5000,
         })
       }
     } catch (error) {
@@ -379,7 +354,7 @@ export default function AdminPanel() {
         title: "❌ Erro",
         description: "Não foi possível testar a conexão",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setTesting(false)
@@ -417,7 +392,7 @@ export default function AdminPanel() {
       toast({
         title: "✅ Sucesso",
         description: "Todos os dados foram apagados com sucesso",
-        duration: 6000,
+        duration: 5000,
       })
 
       setTimeout(() => {
@@ -428,7 +403,7 @@ export default function AdminPanel() {
         title: "❌ Erro",
         description: "Não foi possível apagar todos os dados",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setClearing(false)
@@ -456,6 +431,47 @@ export default function AdminPanel() {
       toast({
         title: "❌ Erro",
         description: "Não foi possível atualizar o papel do usuário",
+        variant: "destructive",
+        duration: 5000,
+      })
+    }
+  }
+
+  const deleteUser = async (userId: string, userEmail: string) => {
+    if (userEmail === "carlos.oldenburg@videosoft.com.br") {
+      toast({
+        title: "❌ Erro",
+        description: "Não é possível deletar o usuário super admin",
+        variant: "destructive",
+        duration: 5000,
+      })
+      return
+    }
+
+    if (!confirm(`Tem certeza que deseja deletar o usuário ${userEmail}?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      })
+
+      if (!response.ok) throw new Error("Failed to delete user")
+
+      setUsers(users.filter((u) => u.id !== userId))
+
+      toast({
+        title: "✅ Sucesso",
+        description: "Usuário deletado com sucesso",
+        duration: 5000,
+      })
+    } catch (error) {
+      toast({
+        title: "❌ Erro",
+        description: "Não foi possível deletar o usuário",
         variant: "destructive",
         duration: 5000,
       })
@@ -491,7 +507,7 @@ export default function AdminPanel() {
           <p className="text-gray-600 dark:text-gray-400">Gerencie configurações do sistema e usuários</p>
         </div>
         <div className="flex items-center space-x-2">
-          <Badge variant="secondary">Admin</Badge>
+          <Badge variant="secondary">{isSuperAdmin ? "Super Admin" : "Admin"}</Badge>
           <Button onClick={refreshPage} variant="outline" size="sm" disabled={refreshing}>
             {refreshing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Atualizar
@@ -500,7 +516,7 @@ export default function AdminPanel() {
       </div>
 
       <Tabs defaultValue="data" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className={`grid w-full ${isSuperAdmin ? "grid-cols-6" : "grid-cols-5"}`}>
           <TabsTrigger value="data" className="flex items-center space-x-2">
             <Database className="h-4 w-4" />
             <span>Dados & Setup</span>
@@ -517,10 +533,12 @@ export default function AdminPanel() {
             <Key className="h-4 w-4" />
             <span>OpenAI</span>
           </TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center space-x-2">
-            <Users className="h-4 w-4" />
-            <span>Usuários</span>
-          </TabsTrigger>
+          {isSuperAdmin && (
+            <TabsTrigger value="users" className="flex items-center space-x-2">
+              <Users className="h-4 w-4" />
+              <span>Usuários</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="clients" className="flex items-center space-x-2">
             <Tag className="h-4 w-4" />
             <span>Clientes</span>
@@ -529,58 +547,6 @@ export default function AdminPanel() {
 
         <TabsContent value="data" className="space-y-4">
           <SystemMonitor />
-
-          {/* Setup do Banco de Dados */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Wrench className="h-5 w-5 mr-2" />
-                Configuração Inicial do Banco
-              </CardTitle>
-              <CardDescription>Configure e inicialize o banco de dados (executar apenas uma vez)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertDescription className="text-blue-800 dark:text-blue-200">
-                  <strong>🔧 Primeira Configuração:</strong> Execute este setup apenas uma vez para criar todas as
-                  tabelas, índices e dados iniciais no banco Neon.
-                </AlertDescription>
-              </Alert>
-
-              <div className="space-y-4">
-                <div className="p-4 border rounded-lg">
-                  <h4 className="font-medium mb-2">O que será criado:</h4>
-                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                    <li>✅ 5 tabelas principais (users, tasks, daily_summaries, etc.)</li>
-                    <li>✅ 11 índices para performance otimizada</li>
-                    <li>✅ 8 configurações padrão do sistema</li>
-                    <li>✅ 6 tags de cliente pré-configuradas</li>
-                    <li>✅ Usuário admin padrão</li>
-                  </ul>
-                </div>
-
-                <Button onClick={setupDatabase} disabled={setupingDb} className="w-full" size="lg">
-                  {setupingDb ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Configurando Banco...
-                    </>
-                  ) : (
-                    <>
-                      <Wrench className="h-4 w-4 mr-2" />🔧 Configurar Banco de Dados
-                    </>
-                  )}
-                </Button>
-
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  <p>
-                    <strong>Credenciais padrão:</strong> admin@resumobeta.com / admin123
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Backup e Sincronização */}
           <Card>
@@ -675,7 +641,6 @@ export default function AdminPanel() {
           </Card>
         </TabsContent>
 
-        {/* Outras abas permanecem iguais... */}
         <TabsContent value="app" className="space-y-4">
           <Card>
             <CardHeader>
@@ -942,46 +907,116 @@ export default function AdminPanel() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="users" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gerenciar Usuários</CardTitle>
-              <CardDescription>Visualize e gerencie os usuários do sistema</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {users.length > 0 ? (
-                  users.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <div className="font-medium">{user.name || "Sem nome"}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">
-                          Criado em: {new Date(user.created_at).toLocaleDateString("pt-BR")}
+        {isSuperAdmin && (
+          <TabsContent value="users" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Users className="h-5 w-5 mr-2" />
+                  Gerenciar Usuários
+                </CardTitle>
+                <CardDescription>
+                  Visualize e gerencie os usuários do sistema. Apenas você tem acesso a esta funcionalidade.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Criar Novo Usuário */}
+                <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
+                  <h4 className="font-medium mb-4 flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Criar Novo Usuário
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-name">Nome Completo</Label>
+                      <Input
+                        id="new-user-name"
+                        value={newUserName}
+                        onChange={(e) => setNewUserName(e.target.value)}
+                        placeholder="Ex: João Silva"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-email">Email</Label>
+                      <Input
+                        id="new-user-email"
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="joao@empresa.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-password">Senha</Label>
+                      <Input
+                        id="new-user-password"
+                        type="password"
+                        value={newUserPassword}
+                        onChange={(e) => setNewUserPassword(e.target.value)}
+                        placeholder="Senha segura"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={createUser} disabled={creatingUser} className="mt-4">
+                    {creatingUser ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Criando...
+                      </>
+                    ) : (
+                      <>
+                        <Users className="h-4 w-4 mr-2" />
+                        Criar Usuário
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Lista de Usuários */}
+                <div className="space-y-4">
+                  <h4 className="font-medium">Usuários Existentes</h4>
+                  {users.length > 0 ? (
+                    users.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <div className="font-medium">{user.name || "Sem nome"}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                          <div className="text-xs text-gray-400 dark:text-gray-500">
+                            Criado em: {new Date(user.created_at).toLocaleDateString("pt-BR")}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant={user.role === "admin" ? "default" : "secondary"}>
+                            {user.email === "carlos.oldenburg@videosoft.com.br" ? "Super Admin" : user.role}
+                          </Badge>
+                          {user.email !== "carlos.oldenburg@videosoft.com.br" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateUserRole(user.id, user.role === "admin" ? "user" : "admin")}
+                              >
+                                {user.role === "admin" ? "Remover Admin" : "Tornar Admin"}
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => deleteUser(user.id, user.email)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={user.role === "admin" ? "default" : "secondary"}>{user.role}</Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateUserRole(user.id, user.role === "admin" ? "user" : "admin")}
-                        >
-                          {user.role === "admin" ? "Remover Admin" : "Tornar Admin"}
-                        </Button>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Nenhum usuário encontrado</p>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Nenhum usuário encontrado</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="clients" className="space-y-4">
           <ClientTagManager />

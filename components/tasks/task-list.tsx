@@ -24,6 +24,7 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { format, isValid, parseISO } from "date-fns"
@@ -66,6 +67,7 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
   const [searching, setSearching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<TaskFilters>({
     showClosed: true,
   })
@@ -113,7 +115,8 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
   const fetchTasks = async () => {
     try {
       setLoading(true)
-      console.log("Fetching tasks with selectedDate:", selectedDate)
+      setError(null)
+      console.log("🔍 Buscando tarefas com data selecionada:", selectedDate)
 
       const params = new URLSearchParams()
 
@@ -127,33 +130,37 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
           console.error("Data selecionada inválida para fetch:", selectedDate)
         }
       } else {
-        // Se não há data selecionada, buscar todas as tarefas
+        // Se não há data selecionada, buscar todas as tarefas abertas
         params.append("includeOpen", "true")
       }
 
       const url = `/api/tasks?${params.toString()}`
-      console.log("Fetching from URL:", url)
+      console.log("📡 Fazendo requisição para:", url)
 
       const response = await fetch(url)
+
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Fetch error:", response.status, errorText)
-        throw new Error(`Failed to fetch tasks: ${response.status}`)
+        const errorData = await response.json()
+        console.error("❌ Erro na resposta:", response.status, errorData)
+        throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("Fetched tasks:", data)
+      console.log("✅ Tarefas recebidas:", data.length)
 
       setTasks(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error("Erro ao buscar tarefas:", error)
-      toast({
-        title: "❌ Erro",
-        description: "Não foi possível carregar as tarefas",
-        variant: "destructive",
-        duration: 6000,
-      })
+      setError(null)
+    } catch (error: any) {
+      console.error("💥 Erro ao buscar tarefas:", error)
+      setError(error.message)
       setTasks([])
+
+      toast({
+        title: "❌ Erro ao Carregar Tarefas",
+        description: error.message || "Não foi possível carregar as tarefas",
+        variant: "destructive",
+        duration: 5000,
+      })
     } finally {
       setLoading(false)
     }
@@ -163,16 +170,20 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
     setRefreshing(true)
     await fetchTasks()
     setRefreshing(false)
-    toast({
-      title: "✅ Atualizado",
-      description: "Lista de tarefas atualizada",
-      duration: 3000,
-    })
+
+    if (!error) {
+      toast({
+        title: "✅ Lista Atualizada",
+        description: "Tarefas recarregadas com sucesso",
+        duration: 5000,
+      })
+    }
   }
 
   const searchTasks = async () => {
     try {
       setSearching(true)
+      setError(null)
 
       const params = new URLSearchParams()
 
@@ -194,22 +205,27 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
       }
 
       const response = await fetch(`/api/tasks?${params.toString()}`)
-      if (!response.ok) throw new Error("Failed to search tasks")
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to search tasks")
+      }
+
       const data = await response.json()
       setTasks(Array.isArray(data) ? data : [])
 
       toast({
-        title: "🔍 Busca Realizada",
+        title: "🔍 Busca Concluída",
         description: `Encontradas ${data.length} tarefas`,
         duration: 5000,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao buscar tarefas:", error)
       toast({
-        title: "❌ Erro",
-        description: "Não foi possível realizar a busca",
+        title: "❌ Erro na Busca",
+        description: error.message || "Não foi possível realizar a busca",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setSearching(false)
@@ -245,7 +261,7 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
   const createTask = async () => {
     if (!newTaskTitle.trim()) {
       toast({
-        title: "❌ Erro",
+        title: "❌ Campo Obrigatório",
         description: "O título da tarefa é obrigatório",
         variant: "destructive",
         duration: 5000,
@@ -264,7 +280,7 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
         status: "in_progress",
       }
 
-      console.log("Creating task:", taskData)
+      console.log("➕ Criando tarefa:", taskData)
 
       const response = await fetch("/api/tasks", {
         method: "POST",
@@ -278,7 +294,7 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
       }
 
       const newTask = await response.json()
-      console.log("Task created:", newTask)
+      console.log("✅ Tarefa criada:", newTask)
 
       setTasks([newTask, ...tasks])
 
@@ -295,17 +311,17 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
       setIsAddingTask(false)
 
       toast({
-        title: "✅ Sucesso",
-        description: "Tarefa criada com sucesso",
+        title: "✅ Tarefa Criada",
+        description: "Nova tarefa adicionada com sucesso",
         duration: 5000,
       })
     } catch (error: any) {
       console.error("Erro ao criar tarefa:", error)
       toast({
-        title: "❌ Erro",
+        title: "❌ Erro ao Criar",
         description: error.message || "Não foi possível criar a tarefa",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     }
   }
@@ -338,18 +354,18 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
 
       if (data.status === "completed" || data.status === "canceled") {
         toast({
-          title: "✅ Tarefa Fechada",
-          description: `Tarefa movida para a seção "Fechadas". ${!filters.showClosed ? 'Ative "Mostrar tarefas fechadas" para visualizá-la.' : ""}`,
+          title: "✅ Tarefa Finalizada",
+          description: `Tarefa movida para "Fechadas". ${!filters.showClosed ? 'Ative "Mostrar fechadas" para visualizá-la.' : ""}`,
           duration: 5000,
         })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao atualizar tarefa:", error)
       toast({
-        title: "❌ Erro",
-        description: "Não foi possível atualizar a tarefa",
+        title: "❌ Erro ao Atualizar",
+        description: error.message || "Não foi possível atualizar a tarefa",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
       throw error
     }
@@ -357,7 +373,7 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
 
   const deleteTask = async (id: string) => {
     try {
-      console.log("Deleting task:", id)
+      console.log("🗑️ Deletando tarefa:", id)
 
       const response = await fetch(`/api/tasks/${id}`, {
         method: "DELETE",
@@ -370,24 +386,24 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
       }
 
       const result = await response.json()
-      console.log("Delete result:", result)
+      console.log("✅ Tarefa deletada:", result)
 
       setTasks(tasks.filter((task) => task.id !== id))
 
       autoBackup("task_deleted", { id })
 
       toast({
-        title: "✅ Sucesso",
-        description: "Tarefa excluída com sucesso",
+        title: "✅ Tarefa Excluída",
+        description: "Tarefa removida com sucesso",
         duration: 5000,
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao deletar tarefa:", error)
       toast({
-        title: "❌ Erro",
-        description: "Não foi possível excluir a tarefa",
+        title: "❌ Erro ao Excluir",
+        description: error.message || "Não foi possível excluir a tarefa",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
       throw error
     }
@@ -422,11 +438,28 @@ export default function TaskList({ selectedDate, onDateChange }: TaskListProps) 
         {[1, 2, 3].map((i) => (
           <Card key={i} className="animate-pulse bg-gray-800 border-gray-700">
             <CardContent className="p-4">
-              <div className="h-4 bg-gray-700 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-700 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-700 rounded w-1/2"></div>
             </CardContent>
           </Card>
         ))}
       </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-red-900/20 border-red-700">
+        <CardContent className="p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-red-300 mb-2">Erro ao Carregar Tarefas</h3>
+          <p className="text-red-400 mb-4">{error}</p>
+          <Button onClick={fetchTasks} variant="outline" className="border-red-600 text-red-300 hover:bg-red-700">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Tentar Novamente
+          </Button>
+        </CardContent>
+      </Card>
     )
   }
 

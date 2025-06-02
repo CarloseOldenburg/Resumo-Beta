@@ -23,8 +23,8 @@ export default function LoginForm() {
 
     if (!email || !password) {
       toast({
-        title: "❌ Erro",
-        description: "Preencha todos os campos",
+        title: "⚠️ Campos obrigatórios",
+        description: "Por favor, preencha email e senha",
         variant: "destructive",
         duration: 5000,
       })
@@ -37,26 +37,30 @@ export default function LoginForm() {
 
       if (result.isAuthenticated) {
         toast({
-          title: "✅ Login realizado com sucesso!",
-          description: "Redirecionando para o dashboard...",
-          duration: 6000,
+          title: "🎉 Login realizado!",
+          description: `Bem-vindo, ${result.user?.name || "usuário"}!`,
+          variant: "default",
+          duration: 5000,
         })
-        // Usar redirecionamento direto em vez de router.push para evitar problemas de estado
-        window.location.href = "/dashboard"
+
+        // Pequeno delay para mostrar o toast antes de redirecionar
+        setTimeout(() => {
+          window.location.href = "/dashboard"
+        }, 1000)
       } else {
         toast({
           title: "❌ Falha no login",
-          description: result.error || "Credenciais inválidas",
+          description: result.error || "Verifique suas credenciais",
           variant: "destructive",
-          duration: 6000,
+          duration: 5000,
         })
       }
     } catch (error: any) {
       toast({
-        title: "❌ Erro no login",
-        description: error.message || "Ocorreu um erro ao fazer login",
+        title: "💥 Erro inesperado",
+        description: "Tente novamente em alguns instantes",
         variant: "destructive",
-        duration: 6000,
+        duration: 5000,
       })
     } finally {
       setLoading(false)

@@ -100,19 +100,19 @@ export async function GET(request: NextRequest) {
     const blockedTasks = safeTasksArray.filter((t) => t.status === "blocked").length
     const inProgressTasks = safeTasksArray.filter((t) => t.status === "in_progress").length
 
-    // Calcular duração média das tarefas concluídas com validação de datas
+    // Calcular duração média das tarefas concluídas usando created_at e updated_at
     let totalDurationDays = 0
     let tasksWithDuration = 0
 
     safeTasksArray.forEach((task) => {
-      if (task.completed && task.start_date && task.end_date) {
+      if (task.completed && task.created_at && task.updated_at) {
         try {
-          const startDate = new Date(task.start_date)
-          const endDate = new Date(task.end_date)
+          const createdDate = new Date(task.created_at)
+          const updatedDate = new Date(task.updated_at)
 
           // Verificar se as datas são válidas
-          if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-            const duration = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+          if (!isNaN(createdDate.getTime()) && !isNaN(updatedDate.getTime())) {
+            const duration = (updatedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
             if (duration >= 0 && duration < 365) {
               // Máximo de 1 ano para evitar valores absurdos
               totalDurationDays += duration

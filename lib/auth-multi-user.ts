@@ -9,6 +9,8 @@ export interface User {
   username: string
   name: string
   role: string
+  is_active: boolean
+  last_login?: string
 }
 
 export interface AuthState {
@@ -18,22 +20,54 @@ export interface AuthState {
   error: string | null
 }
 
-// Função para login (aceita email ou username)
-export async function login(identifier: string, password: string): Promise<AuthState> {
-  try {
-    console.log("🔐 Iniciando login para:", identifier)
+// Usuários padrão do sistema (senhas serão hasheadas)
+const DEFAULT_USERS = [
+  {
+    username: "admin",
+    email: "admin@qamanager.com",
+    password: "admin123",
+    name: "Administrador",
+    role: "admin",
+  },
+  {
+    username: "user1",
+    email: "user1@qamanager.com",
+    password: "user123",
+    name: "Usuário 1",
+    role: "user",
+  },
+  {
+    username: "user2",
+    email: "user2@qamanager.com",
+    password: "user123",
+    name: "Usuário 2",
+    role: "user",
+  },
+]
 
+// Função para hash de senha (simulada no cliente para demo)
+function hashPassword(password: string): string {
+  // Em produção, isso seria feito no servidor
+  return btoa(password + "salt_qa_manager")
+}
+
+function verifyPassword(password: string, hash: string): boolean {
+  return hashPassword(password) === hash
+}
+
+// Função para login
+export async function login(username: string, password: string): Promise<AuthState> {
+  try {
+    // Verificar credenciais via API
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email: identifier, password }),
+      body: JSON.stringify({ username, password }),
     })
 
     const data = await response.json()
-
-    console.log("📡 Resposta da API:", { success: data.success, error: data.error })
 
     if (!response.ok) {
       return {
@@ -47,10 +81,8 @@ export async function login(identifier: string, password: string): Promise<AuthS
     // Salvar estado de autenticação
     localStorage.setItem("isAuthenticated", "true")
     localStorage.setItem("currentUser", JSON.stringify(data.user))
-    localStorage.setItem("authToken", data.token)
+    localStorage.setItem("authToken", data.token || "valid")
     localStorage.setItem("authTimestamp", Date.now().toString())
-
-    console.log("✅ Login salvo no localStorage:", data.user.email)
 
     return {
       isAuthenticated: true,
@@ -59,7 +91,6 @@ export async function login(identifier: string, password: string): Promise<AuthS
       error: null,
     }
   } catch (error: any) {
-    console.error("💥 Erro no login:", error)
     return {
       isAuthenticated: false,
       user: null,
@@ -133,7 +164,6 @@ export function useAuth(): AuthState {
           localStorage.setItem("authTimestamp", Date.now().toString())
         }
       } catch (error) {
-        console.error("❌ Erro ao verificar autenticação:", error)
         setAuthState({
           isAuthenticated: false,
           user: null,
@@ -165,8 +195,11 @@ export function getCurrentUser(): User | null {
   }
 }
 
-// Função para obter token de autenticação
-export function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null
-  return localStorage.getItem("authToken")
+// Função para obter usuários disponíveis (para tela de login)
+export function getAvailableUsers() {
+  return DEFAULT_USERS.map((user) => ({
+    username: user.username,
+    name: user.name,
+    role: user.role,
+  }))
 }

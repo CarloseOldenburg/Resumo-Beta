@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Edit2, Trash2, Save, X, Tag, Calendar } from "lucide-react"
+import { Edit2, Trash2, Save, X, Tag, Calendar, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useEffect } from "react"
 import MarkdownChecklist from "../ui/markdown-checklist"
@@ -31,6 +31,7 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
   const [clientTags, setClientTags] = useState<ClientTag[]>([])
   const [loading, setLoading] = useState(false)
   const [updatingTag, setUpdatingTag] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -52,16 +53,34 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
   const handleToggleComplete = async () => {
     try {
       setLoading(true)
-      await onUpdate(task.id, {
+      setError(null)
+
+      console.log("🔄 Alternando status de conclusão da tarefa:", task.id)
+
+      const updateData = {
         completed: !task.completed,
         status: !task.completed ? "completed" : "in_progress",
         end_date: !task.completed ? new Date().toISOString().split("T")[0] : undefined,
-      })
-    } catch (error) {
+      }
+
+      console.log("📝 Dados de atualização:", updateData)
+
+      await onUpdate(task.id, updateData)
+
       toast({
-        title: "Erro",
-        description: "Não foi possível atualizar a tarefa",
+        title: !task.completed ? "✅ Tarefa Concluída" : "🔄 Tarefa Reaberta",
+        description: !task.completed ? "Tarefa marcada como concluída" : "Tarefa marcada como em andamento",
+        duration: 5000,
+      })
+    } catch (error: any) {
+      console.error("❌ Erro ao alternar conclusão:", error)
+      setError(error.message || "Erro ao atualizar tarefa")
+
+      toast({
+        title: "❌ Erro ao Atualizar",
+        description: error.message || "Não foi possível atualizar a tarefa",
         variant: "destructive",
+        duration: 5000,
       })
     } finally {
       setLoading(false)
@@ -71,26 +90,36 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
   const handleTagChange = async (newTag: string) => {
     try {
       setUpdatingTag(true)
+      setError(null)
+
+      console.log("🏷️ Alterando tag da tarefa:", task.id, "para:", newTag)
 
       // Auto-marcar como concluído se status for completed ou canceled
       const shouldComplete = newTag === "completed" || newTag === "canceled"
 
-      await onUpdate(task.id, {
+      const updateData = {
         tag: newTag === "none" ? undefined : newTag,
         status: newTag === "none" ? "in_progress" : newTag,
         completed: shouldComplete,
         end_date: shouldComplete ? new Date().toISOString().split("T")[0] : undefined,
-      })
+      }
+
+      await onUpdate(task.id, updateData)
 
       toast({
-        title: "Sucesso",
-        description: "Status atualizado com sucesso",
+        title: "✅ Status Atualizado",
+        description: "Status da tarefa alterado com sucesso",
+        duration: 5000,
       })
-    } catch (error) {
+    } catch (error: any) {
+      console.error("❌ Erro ao alterar tag:", error)
+      setError(error.message || "Erro ao atualizar status")
+
       toast({
-        title: "Erro",
-        description: "Não foi possível atualizar o status",
+        title: "❌ Erro no Status",
+        description: error.message || "Não foi possível atualizar o status",
         variant: "destructive",
+        duration: 5000,
       })
     } finally {
       setUpdatingTag(false)
@@ -100,19 +129,21 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
   const handleSave = async () => {
     if (!editTitle.trim()) {
       toast({
-        title: "Erro",
+        title: "❌ Campo Obrigatório",
         description: "O título da tarefa é obrigatório",
         variant: "destructive",
+        duration: 5000,
       })
       return
     }
 
     try {
       setLoading(true)
+      setError(null)
 
       const shouldComplete = editTag === "completed" || editTag === "canceled"
 
-      await onUpdate(task.id, {
+      const updateData = {
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
         start_date: editStartDate || undefined,
@@ -121,13 +152,25 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
         tag: editTag === "none" ? undefined : editTag,
         status: editTag === "none" ? "in_progress" : editTag,
         completed: shouldComplete,
-      })
+      }
+
+      await onUpdate(task.id, updateData)
       setIsEditing(false)
-    } catch (error) {
+
       toast({
-        title: "Erro",
-        description: "Não foi possível salvar a tarefa",
+        title: "✅ Tarefa Salva",
+        description: "Alterações salvas com sucesso",
+        duration: 5000,
+      })
+    } catch (error: any) {
+      console.error("❌ Erro ao salvar:", error)
+      setError(error.message || "Erro ao salvar tarefa")
+
+      toast({
+        title: "❌ Erro ao Salvar",
+        description: error.message || "Não foi possível salvar a tarefa",
         variant: "destructive",
+        duration: 5000,
       })
     } finally {
       setLoading(false)
@@ -142,18 +185,33 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
     setEditClientTags(task.client_tags || [])
     setEditTag(task.tag || "none")
     setIsEditing(false)
+    setError(null)
   }
 
   const handleDelete = async () => {
     if (confirm("Tem certeza que deseja excluir esta tarefa?")) {
       try {
         setLoading(true)
+        setError(null)
+
+        console.log("🗑️ Deletando tarefa:", task.id)
+
         await onDelete(task.id)
-      } catch (error) {
+
         toast({
-          title: "Erro",
-          description: "Não foi possível excluir a tarefa",
+          title: "✅ Tarefa Excluída",
+          description: "Tarefa removida com sucesso",
+          duration: 5000,
+        })
+      } catch (error: any) {
+        console.error("❌ Erro ao deletar:", error)
+        setError(error.message || "Erro ao excluir tarefa")
+
+        toast({
+          title: "❌ Erro ao Excluir",
+          description: error.message || "Não foi possível excluir a tarefa",
           variant: "destructive",
+          duration: 5000,
         })
       } finally {
         setLoading(false)
@@ -166,11 +224,13 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
       await onUpdate(task.id, {
         description: newDescription,
       })
-    } catch (error) {
+    } catch (error: any) {
+      console.error("❌ Erro ao atualizar checklist:", error)
       toast({
-        title: "Erro",
-        description: "Não foi possível atualizar a checklist",
+        title: "❌ Erro na Checklist",
+        description: error.message || "Não foi possível atualizar a checklist",
         variant: "destructive",
+        duration: 5000,
       })
     }
   }
@@ -212,21 +272,47 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
     })
   }
 
+  // Calcular duração baseada em created_at e updated_at (quando concluída)
   const calculateDuration = () => {
-    if (!task.start_date) return null
+    if (!task.created_at) return null
 
-    const startDate = new Date(task.start_date)
-    const endDate = task.end_date ? new Date(task.end_date) : new Date()
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    try {
+      const createdDate = new Date(task.created_at)
+      const endDate = task.completed && task.updated_at ? new Date(task.updated_at) : new Date()
 
-    return diffDays
+      if (!createdDate || !endDate) return null
+
+      const diffTime = Math.abs(endDate.getTime() - createdDate.getTime())
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+      return diffDays
+    } catch (error) {
+      console.error("Erro ao calcular duração:", error)
+      return null
+    }
   }
 
   return (
-    <Card className={`transition-all ${task.completed ? "opacity-75" : ""}`}>
+    <Card className={`transition-all ${task.completed ? "opacity-75" : ""} ${error ? "border-red-500" : ""}`}>
       <CardContent className="p-4">
-        <div className="flex items-start space-x-3">
+        {error && (
+          <div className="mb-3 p-2 bg-red-900/20 border border-red-700 rounded flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <span className="text-red-300 text-sm">{error}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setError(null)}
+              className="ml-auto h-6 w-6 p-0 text-red-400 hover:text-red-300"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* Layout principal reorganizado */}
+        <div className="grid grid-cols-[auto_1fr_auto] gap-3 items-start">
+          {/* Checkbox */}
           <Checkbox
             checked={task.completed}
             onCheckedChange={handleToggleComplete}
@@ -234,7 +320,8 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
             className="mt-1"
           />
 
-          <div className="flex-1 min-w-0">
+          {/* Conteúdo principal */}
+          <div className="min-w-0">
             {isEditing ? (
               <div className="space-y-3">
                 <Input
@@ -242,34 +329,37 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
                   onChange={(e) => setEditTitle(e.target.value)}
                   placeholder="Título da tarefa"
                   disabled={loading}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500">Data Início</label>
+                    <label className="text-xs text-gray-400">Data Início</label>
                     <Input
                       type="date"
                       value={editStartDate}
                       onChange={(e) => setEditStartDate(e.target.value)}
                       disabled={loading}
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">Data Fim</label>
+                    <label className="text-xs text-gray-400">Data Fim</label>
                     <Input
                       type="date"
                       value={editEndDate}
                       onChange={(e) => setEditEndDate(e.target.value)}
                       disabled={loading}
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 <Select value={editTag} onValueChange={setEditTag}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Selecione um status" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-gray-800 border-gray-700">
                     <SelectItem value="none">Sem status</SelectItem>
                     <SelectItem value="in_progress">🔄 Em Andamento</SelectItem>
                     <SelectItem value="completed">✅ Concluído</SelectItem>
@@ -283,10 +373,10 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
                   value={editClientTags[0] || "none"}
                   onValueChange={(value) => setEditClientTags(value === "none" ? [] : [value])}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Selecionar cliente" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-gray-800 border-gray-700">
                     <SelectItem value="none">Nenhum cliente</SelectItem>
                     {clientTags.map((tag) => (
                       <SelectItem key={tag.id} value={tag.name}>
@@ -305,6 +395,7 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
                   placeholder="Descrição (opcional) - Suporta checklist em markdown"
                   disabled={loading}
                   rows={4}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 />
 
                 <div className="flex space-x-2">
@@ -321,26 +412,26 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
             ) : (
               <div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <h3 className={`font-medium ${task.completed ? "line-through text-gray-500" : ""}`}>{task.title}</h3>
+                  <h3 className={`font-medium ${task.completed ? "line-through text-gray-500" : "text-white"}`}>
+                    {task.title}
+                  </h3>
                   {getTagBadge()}
                   {getClientTagBadges()}
                   {calculateDuration() && (
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs border-gray-600 text-gray-300">
                       <Calendar className="h-3 w-3 mr-1" />
                       {calculateDuration()} dias
                     </Badge>
                   )}
                 </div>
 
-                {/* Datas */}
                 {(task.start_date || task.end_date) && (
-                  <div className="flex items-center gap-4 mb-2 text-xs text-gray-500">
+                  <div className="flex items-center gap-4 mb-2 text-xs text-gray-400">
                     {task.start_date && <span>Início: {new Date(task.start_date).toLocaleDateString("pt-BR")}</span>}
                     {task.end_date && <span>Fim: {new Date(task.end_date).toLocaleDateString("pt-BR")}</span>}
                   </div>
                 )}
 
-                {/* Seletor de Status Rápido */}
                 <div className="flex items-center gap-2 mb-2">
                   <Tag className="h-4 w-4 text-gray-400" />
                   <Select
@@ -348,10 +439,10 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
                     onValueChange={handleTagChange}
                     disabled={updatingTag || loading}
                   >
-                    <SelectTrigger className="w-48 h-8 text-xs">
+                    <SelectTrigger className="w-48 h-8 text-xs bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Alterar status" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-gray-800 border-gray-700">
                       <SelectItem value="in_progress">🔄 Em Andamento</SelectItem>
                       <SelectItem value="completed">✅ Concluído</SelectItem>
                       <SelectItem value="paused">⏸️ Pausado</SelectItem>
@@ -363,7 +454,7 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
                 </div>
 
                 {task.description && (
-                  <div className={`mt-2 ${task.completed ? "text-gray-500" : ""}`}>
+                  <div className={`mt-2 ${task.completed ? "text-gray-500" : "text-gray-300"}`}>
                     <MarkdownChecklist content={task.description} onChange={handleChecklistChange} />
                   </div>
                 )}
@@ -371,19 +462,26 @@ export default function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
             )}
           </div>
 
+          {/* Botões de ação */}
           {!isEditing && (
-            <div className="flex space-x-1">
-              <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} disabled={loading}>
-                <Edit2 className="h-3 w-3" />
+            <div className="flex items-center space-x-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsEditing(true)}
+                disabled={loading}
+                className="h-8 w-8 p-0"
+              >
+                <Edit2 className="h-4 w-4" />
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={handleDelete}
                 disabled={loading}
-                className="text-red-600 hover:text-red-700"
+                className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           )}
